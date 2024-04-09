@@ -14,18 +14,72 @@ uint16_t measurement_delay_us = 65535; // Delay between measurements for testing
 #define ICM_MISO 19
 #define ICM_MOSI 23
 
+//MUISTIPAIKAT MAG DATALLE KUN KÄYTETÄÄN SPI:TA
+#define I2C_SLV0_ADDR 0x03
+#define I2C_SLV0_REG 0x04
+#define I2C_SLV0_CTRL 0x05
+#define AK09916_ADDR 0x0C
+
+bool enablePrint = false;
+
+// SPI-kirjoitus- ja lukufunktiot
+void writeToRegister(uint8_t reg, uint8_t data) {
+  digitalWrite(ICM_CS, LOW); // Aktivoi sirun valinta
+  SPI.transfer(reg); // Lähetä rekisterin osoite
+  SPI.transfer(data); // Lähetä data
+  digitalWrite(ICM_CS, HIGH); // Deaktivoi sirun valinta
+}
+uint8_t readFromRegister(uint8_t reg) {
+  digitalWrite(ICM_CS, LOW); // Aktivoi sirun valinta
+  SPI.transfer(reg | 0x80); // Lähetä rekisterin osoite ja aseta MSB:ksi 1 lukemista varten
+  uint8_t data = SPI.transfer(0x00); // Lue data
+  digitalWrite(ICM_CS, HIGH); // Deaktivoi sirun valinta
+  return data; // Palauta luetut tiedot
+}
+
 void setup(void) {
   Serial.begin(115200);
   while (!Serial)
     delay(10); // will pause Zero, Leonardo, etc until serial console opens
 
   Serial.println("Adafruit ICM20948 test!");
+  
+  //Wire.setPins(18, 19);
+  //Wire.begin();
+    // Alusta SPI-väylä
+  SPI.begin(ICM_SCK, ICM_MISO, ICM_MOSI, ICM_CS);
+  //SPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE0)); // Aseta SPI-asetukset
+
+  // Alusta ESP32:n pinnit
+  pinMode(ICM_CS, OUTPUT);
+  digitalWrite(ICM_CS, HIGH); // Deaktivoi sirun valinta
+  //VAihdetaan 3 bank
+  writeToRegister(0x7F, 0x30);
+  
+  uint8_t value1 = readFromRegister(I2C_SLV0_ADDR);
+  delay(1000);
+  writeToRegister(I2C_SLV0_ADDR, AK09916_ADDR);
+  uint8_t value2 = readFromRegister(I2C_SLV0_ADDR);
+
+
+/*   if (!icm.setupMag()) {
+    Serial.println("failed to setup mag");
+  }
+  else {
+    Serial.println("mag setup OK");
+  } */
+
+  SPI.end();
+  Serial.print("I2C_SLV0_ADDR: ");
+  Serial.println(value1);
+  Serial.print("I2C_SLV0_ADDR: ");
+  Serial.println(value2);
+
 
   // Try to initialize!
   //if (!icm.begin_I2C()) {
     //if (!icm.begin_SPI(ICM_CS)) {
   if (!icm.begin_SPI(ICM_CS, ICM_SCK, ICM_MISO, ICM_MOSI)) {
-
     Serial.println("Failed to find ICM20948 chip");
     while (1) {
       delay(10);
@@ -119,59 +173,61 @@ void loop() {
   sensors_event_t mag;
   sensors_event_t temp;
   icm.getEvent(&accel, &gyro, &temp, &mag);
+  if (enablePrint)
+  {
+    Serial.print("\t\tTemperature ");
+    Serial.print(temp.temperature);
+    Serial.println(" deg C");
 
-  Serial.print("\t\tTemperature ");
-  Serial.print(temp.temperature);
-  Serial.println(" deg C");
+    /* Display the results (acceleration is measured in m/s^2) */
+    Serial.print("\t\tAccel X: ");
+    Serial.print(accel.acceleration.x);
+    Serial.print(" \tY: ");
+    Serial.print(accel.acceleration.y);
+    Serial.print(" \tZ: ");
+    Serial.print(accel.acceleration.z);
+    Serial.println(" m/s^2 ");
 
-  /* Display the results (acceleration is measured in m/s^2) */
-  Serial.print("\t\tAccel X: ");
-  Serial.print(accel.acceleration.x);
-  Serial.print(" \tY: ");
-  Serial.print(accel.acceleration.y);
-  Serial.print(" \tZ: ");
-  Serial.print(accel.acceleration.z);
-  Serial.println(" m/s^2 ");
+    Serial.print("\t\tMag X: ");
+    Serial.print(mag.magnetic.x);
+    Serial.print(" \tY: ");
+    Serial.print(mag.magnetic.y);
+    Serial.print(" \tZ: ");
+    Serial.print(mag.magnetic.z);
+    Serial.println(" uT");
 
-  Serial.print("\t\tMag X: ");
-  Serial.print(mag.magnetic.x);
-  Serial.print(" \tY: ");
-  Serial.print(mag.magnetic.y);
-  Serial.print(" \tZ: ");
-  Serial.print(mag.magnetic.z);
-  Serial.println(" uT");
+    /* Display the results (acceleration is measured in m/s^2) */
+    Serial.print("\t\tGyro X: ");
+    Serial.print(gyro.gyro.x);
+    Serial.print(" \tY: ");
+    Serial.print(gyro.gyro.y);
+    Serial.print(" \tZ: ");
+    Serial.print(gyro.gyro.z);
+    Serial.println(" radians/s ");
+    Serial.println();
 
-  /* Display the results (acceleration is measured in m/s^2) */
-  Serial.print("\t\tGyro X: ");
-  Serial.print(gyro.gyro.x);
-  Serial.print(" \tY: ");
-  Serial.print(gyro.gyro.y);
-  Serial.print(" \tZ: ");
-  Serial.print(gyro.gyro.z);
-  Serial.println(" radians/s ");
-  Serial.println();
+    delay(100);
 
-  delay(100);
+    //  Serial.print(temp.temperature);
+    //
+    //  Serial.print(",");
+    //
+    //  Serial.print(accel.acceleration.x);
+    //  Serial.print(","); Serial.print(accel.acceleration.y);
+    //  Serial.print(","); Serial.print(accel.acceleration.z);
+    //
+    //  Serial.print(",");
+    //  Serial.print(gyro.gyro.x);
+    //  Serial.print(","); Serial.print(gyro.gyro.y);
+    //  Serial.print(","); Serial.print(gyro.gyro.z);
+    //
+    //  Serial.print(",");
+    //  Serial.print(mag.magnetic.x);
+    //  Serial.print(","); Serial.print(mag.magnetic.y);
+    //  Serial.print(","); Serial.print(mag.magnetic.z);
 
-  //  Serial.print(temp.temperature);
-  //
-  //  Serial.print(",");
-  //
-  //  Serial.print(accel.acceleration.x);
-  //  Serial.print(","); Serial.print(accel.acceleration.y);
-  //  Serial.print(","); Serial.print(accel.acceleration.z);
-  //
-  //  Serial.print(",");
-  //  Serial.print(gyro.gyro.x);
-  //  Serial.print(","); Serial.print(gyro.gyro.y);
-  //  Serial.print(","); Serial.print(gyro.gyro.z);
-  //
-  //  Serial.print(",");
-  //  Serial.print(mag.magnetic.x);
-  //  Serial.print(","); Serial.print(mag.magnetic.y);
-  //  Serial.print(","); Serial.print(mag.magnetic.z);
-
-  //  Serial.println();
-  //
-  //  delayMicroseconds(measurement_delay_us);
+    //  Serial.println();
+    //
+    //  delayMicroseconds(measurement_delay_us);
+  }
 }
