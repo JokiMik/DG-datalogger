@@ -37,6 +37,17 @@
 #define LED1 26
 #define LED2 27
 
+#define BTN1 10
+#define BTN2 9
+
+int btn1State = HIGH;
+int btn2State = HIGH;
+
+int btn1StateOld = HIGH;
+int btn2StateOld = HIGH;
+
+bool wifi = false;
+
 #ifdef USE_SPI
 ICM_20948_SPI myICM; // If using SPI create an ICM_20948_SPI object
 #else
@@ -258,14 +269,19 @@ void setup()
 {
   pinMode(LED1,OUTPUT);
   pinMode(LED2,OUTPUT);
+  pinMode(BTN1, INPUT_PULLUP);
+  pinMode(BTN2, INPUT_PULLUP); 
   SERIAL_PORT.begin(115200);
-  initWiFi();
+  
   //initSPIFFS();  //ESP32 internal file system
   initMPU();
   initSDCard();
 
   // Handle Web Server
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+   if(wifi)
+  {
+    initWiFi();
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send(SD, "/index.html", "text/html");
   });
 
@@ -305,21 +321,36 @@ void setup()
   server.addHandler(&events);
 
   server.begin();
+  }
 
 }
 
 void loop()
 {
-  delay(100);
-  digitalWrite(LED1,HIGH);
-  delay(100);
-  digitalWrite(LED1,LOW);
-  delay(500);
-  digitalWrite(LED2,HIGH);
-  delay(500);
-  digitalWrite(LED2,LOW);
+  // read the state of the switch/button:
+  btn1State = digitalRead(BTN1);
+  btn2State = digitalRead(BTN2);
 
-  if ((millis() - lastTime) > gyroDelay) {
+  if(btn1State == LOW)
+  {
+    Serial.println("Button 1 pressed");
+    digitalWrite(LED2, HIGH);
+  }
+   if(btn2State == LOW)
+  {
+    Serial.println("Button 2 pressed");
+    digitalWrite(LED2, LOW);
+  }
+
+  //Blink LED1
+  delay(100);
+  digitalWrite(LED1, HIGH);
+  delay(100);
+  digitalWrite(LED1, LOW);
+
+  if(wifi)
+  {
+    if ((millis() - lastTime) > gyroDelay) {
     // Send Events to the Web Server with the Sensor Readings
     events.send(getGyroReadings().c_str(),"gyro_readings",millis());
     lastTime = millis();
@@ -334,6 +365,8 @@ void loop()
     events.send(getTemperature().c_str(),"temperature_reading",millis());
     lastTimeTemperature = millis();
   }
+  }
+
 }
 
 // Below here are some helper functions to print the data nicely!
