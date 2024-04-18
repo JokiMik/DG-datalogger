@@ -34,6 +34,9 @@
 // On the SparkFun 9DoF IMU breakout the default is 1, and when the ADR jumper is closed the value becomes 0
 #define AD0_VAL 1
 
+#define LED1 26
+#define LED2 27
+
 #ifdef USE_SPI
 ICM_20948_SPI myICM; // If using SPI create an ICM_20948_SPI object
 #else
@@ -253,6 +256,8 @@ String getTemperature(){
 
 void setup()
 {
+  pinMode(LED1,OUTPUT);
+  pinMode(LED2,OUTPUT);
   SERIAL_PORT.begin(115200);
   initWiFi();
   //initSPIFFS();  //ESP32 internal file system
@@ -305,7 +310,16 @@ void setup()
 
 void loop()
 {
-    if ((millis() - lastTime) > gyroDelay) {
+  delay(100);
+  digitalWrite(LED1,HIGH);
+  delay(100);
+  digitalWrite(LED1,LOW);
+  delay(500);
+  digitalWrite(LED2,HIGH);
+  delay(500);
+  digitalWrite(LED2,LOW);
+
+  if ((millis() - lastTime) > gyroDelay) {
     // Send Events to the Web Server with the Sensor Readings
     events.send(getGyroReadings().c_str(),"gyro_readings",millis());
     lastTime = millis();
