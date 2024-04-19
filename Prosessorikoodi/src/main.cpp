@@ -80,6 +80,8 @@ JSONVar readings;
 unsigned long lastTime = 0;  
 unsigned long lastTimeTemperature = 0;
 unsigned long lastTimeAcc = 0;
+unsigned long lastTimeMag = 0;
+unsigned long magDelay = 100;
 unsigned long gyroDelay = 10;
 unsigned long temperatureDelay = 1000;
 unsigned long accelerometerDelay = 200;
@@ -210,8 +212,8 @@ String getMagReadings() {
   readings["magX"] = String(magX);
   readings["magY"] = String(magY);
   readings["magZ"] = String(magZ);
-  String accString = JSON.stringify (readings);
-  return accString;
+  String magString = JSON.stringify (readings);
+  return magString;
 }
 String getTemperature(){
   return String(temperature);
@@ -329,9 +331,9 @@ void loop()
      if (myICM.dataReady())
   {
     myICM.getAGMT();
-    printRawAGMT( myICM.agmt );
-    //getSensorData(&myICM);
-    //printSensorData();
+    //printRawAGMT( myICM.agmt );
+    getSensorData(&myICM);
+    printSensorData();
     delay(100);
   }
   else
@@ -350,17 +352,22 @@ void loop()
     // Send Events to the Web Server with the Sensor Readings
     events.send(getGyroReadings().c_str(),"gyro_readings",millis());
     lastTime = millis();
-  }
-  if ((millis() - lastTimeAcc) > accelerometerDelay) {
+    }
+    if ((millis() - lastTimeAcc) > accelerometerDelay) {
     // Send Events to the Web Server with the Sensor Readings
     events.send(getAccReadings().c_str(),"accelerometer_readings",millis());
     lastTimeAcc = millis();
-  }
-  if ((millis() - lastTimeTemperature) > temperatureDelay) {
+    }
+    if ((millis() - lastTimeMag) > magDelay) {
+    // Send Events to the Web Server with the Sensor Readings
+    events.send(getMagReadings().c_str(),"magnetometer_readings",millis());
+    lastTimeMag = millis();
+    }
+    if ((millis() - lastTimeTemperature) > temperatureDelay) {
     // Send Events to the Web Server with the Sensor Readings
     events.send(getTemperature().c_str(),"temperature_reading",millis());
     lastTimeTemperature = millis();
-  }
+    }
   }
 
   //Turn led1 on that indicates we are end of the loop function

@@ -103,6 +103,14 @@ if (!!window.EventSource) {
     document.getElementById("accY").innerHTML = obj.accY;
     document.getElementById("accZ").innerHTML = obj.accZ;
   }, false);
+
+  source.addEventListener('magnetometer_readings', function(e) {
+    console.log("magnetometer_readings", e.data);
+    var obj = JSON.parse(e.data);
+    document.getElementById("magX").innerHTML = obj.magX;
+    document.getElementById("magY").innerHTML = obj.magY;
+    document.getElementById("magZ").innerHTML = obj.magZ;
+  }, false);
 }
 
 function resetPosition(element){
