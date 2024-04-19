@@ -45,7 +45,7 @@ int btn2State = HIGH;
 
 int btn1StateOld = HIGH;
 int btn2StateOld = HIGH;
-bool bothButtonsPressed = false;
+//int bothButtonsPressed = HIGH;
 
 bool wifi = false;
 bool IMU = false;
@@ -56,12 +56,6 @@ ICM_20948_SPI myICM; // If using SPI create an ICM_20948_SPI object
 ICM_20948_I2C myICM; // Otherwise create an ICM_20948_I2C object
 #endif
 
-//funktioita jotka ei ole omina kirjastoinaan salaisista syistä
-void printScaledAGMT(ICM_20948_SPI *sensor);
-void printSensorDataFloat(ICM_20948_SPI *sensor);
-void printRawAGMT(ICM_20948_AGMT_t agmt);
-void getSensorData(ICM_20948_SPI *sensor);
-void printSensorData();
 //SD:n käyttöfunktioiden julistukset
 void listDir(fs::FS &fs, const char * dirname, uint8_t levels);
 void createDir(fs::FS &fs, const char * path);
@@ -249,7 +243,7 @@ String getTemperature(){
 
 void setupWiFi(){
   // Handle Web Server
-   if(wifi)
+  if(wifi)
   {
     initWiFi();
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -720,28 +714,23 @@ void loop()
   btn1State = digitalRead(BTN1);
   btn2State = digitalRead(BTN2);
 
+  //Start or stop the IMU sensor
   if(btn1StateOld == HIGH && btn1State == LOW)
   {
     Serial.println("Button 1 pressed");
-    digitalWrite(LED2, HIGH);
-    IMU = true;
+    digitalWrite(LED1, !digitalRead(LED1));
+    IMU = !IMU;
     delay(100);
   }
   btn1StateOld = btn1State;
-   if(btn2StateOld == HIGH && btn2State == LOW)
+  
+  //Start or stop the wifi server
+  if(btn2StateOld == HIGH && btn2State == LOW)
   {
     Serial.println("Button 2 pressed");
-    digitalWrite(LED2, LOW);
-    IMU = false;
-    delay(100);
-  }
-  btn2StateOld = btn2State;
-
-  if(btn1State == LOW && btn2State == LOW)
-  {
-    Serial.println("Both buttons pressed");
+    digitalWrite(LED2, !digitalRead(LED2));
     wifi = !wifi;
-    Serial.println("Wifi boolean: " + String(wifi));
+    Serial.println("Wifi boolean: " + wifi);
     if(wifi)
     {
       setupWiFi();
@@ -755,6 +744,14 @@ void loop()
     }
     delay(100);
   }
+  btn2StateOld = btn2State;
+
+  if(btn1State == LOW && btn2State == LOW)
+  {
+    //Don't use if not necessary
+    Serial.println("Both buttons pressed");
+  }
+  
 
   // Read the sensor data
   if(IMU)
@@ -765,7 +762,6 @@ void loop()
     //printRawAGMT( myICM.agmt );
     getSensorData(&myICM);
     printSensorData();
-    delay(100);
   }
   else
   {
@@ -774,7 +770,7 @@ void loop()
   }
   }
   
-
+  
   //Send data to the web server
 
   if(wifi)
@@ -800,7 +796,4 @@ void loop()
     lastTimeTemperature = millis();
     }
   }
-
-  //Turn led1 on that indicates we are end of the loop function
-  digitalWrite(LED1, HIGH);
 }
