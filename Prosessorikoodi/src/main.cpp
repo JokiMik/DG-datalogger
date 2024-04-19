@@ -45,8 +45,10 @@ int btn2State = HIGH;
 
 int btn1StateOld = HIGH;
 int btn2StateOld = HIGH;
+bool bothButtonsPressed = false;
 
 bool wifi = false;
+bool IMU = false;
 
 #ifdef USE_SPI
 ICM_20948_SPI myICM; // If using SPI create an ICM_20948_SPI object
@@ -174,19 +176,6 @@ void initWiFi() {
 }
 
 String getGyroReadings(){
-  if (myICM.dataReady())
-  {
-    myICM.getAGMT();
-    getSensorData(&myICM);
-    //printSensorData();
-    delay(100);
-  }
-  else
-  {
-    SERIAL_PORT.println("Waiting for data");
-    delay(500);
-  }
-
   /* float gyroX_temp = gyroX;
   if(abs(gyroX_temp) > gyroXerror)  {
     gyroX += gyroX_temp/50.00;
@@ -210,18 +199,6 @@ String getGyroReadings(){
 }
 
 String getAccReadings() {
-  if (myICM.dataReady())
-  {
-    myICM.getAGMT();
-    getSensorData(&myICM);
-    //printSensorData();
-    delay(100);
-  }
-  else
-  {
-    SERIAL_PORT.println("Waiting for data");
-    delay(500);
-  }
   readings["accX"] = String(accX);
   readings["accY"] = String(accY);
   readings["accZ"] = String(accZ);
@@ -230,18 +207,6 @@ String getAccReadings() {
 }
 
 String getMagReadings() {
-  if (myICM.dataReady())
-  {
-    myICM.getAGMT();
-    getSensorData(&myICM);
-    //printSensorData();
-    delay(100);
-  }
-  else
-  {
-    SERIAL_PORT.println("Waiting for data");
-    delay(500);
-  }
   readings["magX"] = String(magX);
   readings["magY"] = String(magY);
   readings["magZ"] = String(magZ);
@@ -249,34 +214,10 @@ String getMagReadings() {
   return accString;
 }
 String getTemperature(){
-  if (myICM.dataReady())
-  {
-    myICM.getAGMT();
-    getSensorData(&myICM);
-    //printSensorData();
-    delay(100);
-  }
-  else
-  {
-    SERIAL_PORT.println("Waiting for data");
-    delay(500);
-  }
   return String(temperature);
 }
 
-
-void setup()
-{
-  pinMode(LED1,OUTPUT);
-  pinMode(LED2,OUTPUT);
-  pinMode(BTN1, INPUT_PULLUP);
-  pinMode(BTN2, INPUT_PULLUP); 
-  SERIAL_PORT.begin(115200);
-  
-  //initSPIFFS();  //ESP32 internal file system
-  initMPU();
-  initSDCard();
-
+void setupWiFi(){
   // Handle Web Server
    if(wifi)
   {
@@ -325,28 +266,83 @@ void setup()
 
 }
 
+void setup()
+{
+  pinMode(LED1,OUTPUT);
+  pinMode(LED2,OUTPUT);
+  pinMode(BTN1, INPUT_PULLUP);
+  pinMode(BTN2, INPUT_PULLUP); 
+  SERIAL_PORT.begin(115200);
+  
+  //initSPIFFS();  //ESP32 internal file system
+  initMPU();
+  initSDCard();
+
+  
+}
+
 void loop()
 {
   // read the state of the switch/button:
   btn1State = digitalRead(BTN1);
   btn2State = digitalRead(BTN2);
 
-  if(btn1State == LOW)
+  if(btn1StateOld == HIGH && btn1State == LOW)
   {
     Serial.println("Button 1 pressed");
     digitalWrite(LED2, HIGH);
+    IMU = true;
+    delay(100);
   }
-   if(btn2State == LOW)
+  btn1StateOld = btn1State;
+   if(btn2StateOld == HIGH && btn2State == LOW)
   {
     Serial.println("Button 2 pressed");
     digitalWrite(LED2, LOW);
+    IMU = false;
+    delay(100);
+  }
+  btn2StateOld = btn2State;
+
+  if(btn1State == LOW && btn2State == LOW)
+  {
+    Serial.println("Both buttons pressed");
+    wifi = !wifi;
+    Serial.println("Wifi boolean: " + String(wifi));
+    if(wifi)
+    {
+      setupWiFi();
+    }
+    else
+    {
+      server.end();
+      Serial.println("Server stopped");
+      WiFi.disconnect();
+      Serial.println("Wifi disconnected");
+    }
+    delay(100);
   }
 
-  //Blink LED1
-  delay(100);
-  digitalWrite(LED1, HIGH);
-  delay(100);
-  digitalWrite(LED1, LOW);
+  // Read the sensor data
+  if(IMU)
+  {
+     if (myICM.dataReady())
+  {
+    myICM.getAGMT();
+    printRawAGMT( myICM.agmt );
+    //getSensorData(&myICM);
+    //printSensorData();
+    delay(100);
+  }
+  else
+  {
+    SERIAL_PORT.println("Waiting for data");
+    delay(500);
+  }
+  }
+  
+
+  //Send data to the web server
 
   if(wifi)
   {
@@ -367,7 +363,63 @@ void loop()
   }
   }
 
+  //Turn led1 on that indicates we are end of the loop function
+  digitalWrite(LED1, HIGH);
 }
+
+void getSensorData(ICM_20948_SPI *sensor)
+{
+  
+  temperature = sensor->temp();
+
+  accX = sensor->accX() * 0.00980665;
+  accY = sensor->accY() * 0.00980665;
+  accZ = sensor->accZ() * 0.00980665;
+
+  gyroX = sensor->gyrX() * 0.0174532925; //radians/s
+  gyroY = sensor->gyrY() * 0.0174532925;
+  gyroZ = sensor->gyrZ() * 0.0174532925;
+
+  magX = sensor->magX();
+  magY = sensor->magY();
+  magZ = sensor->magZ();
+  
+}
+
+void printSensorData()
+{
+  SERIAL_PORT.print("\t\tTemperature ");
+  SERIAL_PORT.print(temperature);
+  SERIAL_PORT.println(" deg C");
+
+  SERIAL_PORT.print("\t\tAccel X: ");
+  SERIAL_PORT.print(accX);
+  SERIAL_PORT.print(" \tY: ");
+  SERIAL_PORT.print(accY);
+  SERIAL_PORT.print(" \tZ: ");
+  SERIAL_PORT.print(accZ);
+  SERIAL_PORT.println(" m/s^2 ");
+
+  SERIAL_PORT.print("\t\tGyro X: ");
+  SERIAL_PORT.print(gyroX);
+  SERIAL_PORT.print(" \tY: ");
+  SERIAL_PORT.print(gyroY);
+  SERIAL_PORT.print(" \tZ: ");
+  SERIAL_PORT.print(gyroZ);
+  SERIAL_PORT.println(" rpm");
+
+  SERIAL_PORT.print("\t\tMag X: ");
+  SERIAL_PORT.print(magX);
+  SERIAL_PORT.print(" \tY: ");
+  SERIAL_PORT.print(magY);
+  SERIAL_PORT.print(" \tZ: ");
+  SERIAL_PORT.print(magZ);
+  SERIAL_PORT.println(" uT");
+  SERIAL_PORT.println();
+}
+
+
+
 
 // Below here are some helper functions to print the data nicely!
 
@@ -557,56 +609,6 @@ void printSensorDataFloat(ICM_20948_SPI *sensor)
   SERIAL_PORT.print(magY);
   SERIAL_PORT.print(" \tZ: ");
   float magZ = sensor->magZ();
-  SERIAL_PORT.print(magZ);
-  SERIAL_PORT.println(" uT");
-  SERIAL_PORT.println();
-}
-void getSensorData(ICM_20948_SPI *sensor)
-{
-  
-  temperature = sensor->temp();
-
-  accX = sensor->accX() * 0.00980665;
-  accY = sensor->accY() * 0.00980665;
-  accZ = sensor->accZ() * 0.00980665;
-
-  gyroX = sensor->gyrX() * 0.0174532925; //radians/s
-  gyroY = sensor->gyrY() * 0.0174532925;
-  gyroZ = sensor->gyrZ() * 0.0174532925;
-
-  magX = sensor->magX();
-  magY = sensor->magY();
-  magZ = sensor->magZ();
-  
-}
-
-void printSensorData()
-{
-  SERIAL_PORT.print("\t\tTemperature ");
-  SERIAL_PORT.print(temperature);
-  SERIAL_PORT.println(" deg C");
-
-  SERIAL_PORT.print("\t\tAccel X: ");
-  SERIAL_PORT.print(accX);
-  SERIAL_PORT.print(" \tY: ");
-  SERIAL_PORT.print(accY);
-  SERIAL_PORT.print(" \tZ: ");
-  SERIAL_PORT.print(accZ);
-  SERIAL_PORT.println(" m/s^2 ");
-
-  SERIAL_PORT.print("\t\tGyro X: ");
-  SERIAL_PORT.print(gyroX);
-  SERIAL_PORT.print(" \tY: ");
-  SERIAL_PORT.print(gyroY);
-  SERIAL_PORT.print(" \tZ: ");
-  SERIAL_PORT.print(gyroZ);
-  SERIAL_PORT.println(" rpm");
-
-  SERIAL_PORT.print("\t\tMag X: ");
-  SERIAL_PORT.print(magX);
-  SERIAL_PORT.print(" \tY: ");
-  SERIAL_PORT.print(magY);
-  SERIAL_PORT.print(" \tZ: ");
   SERIAL_PORT.print(magZ);
   SERIAL_PORT.println(" uT");
   SERIAL_PORT.println();
