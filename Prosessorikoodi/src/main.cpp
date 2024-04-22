@@ -49,6 +49,8 @@ int btn2StateOld = HIGH;
 
 bool wifi = false;
 bool IMU = false;
+bool createDataFlag = false;
+int dataFileIndex;
 
 #ifdef USE_SPI
 ICM_20948_SPI myICM; // If using SPI create an ICM_20948_SPI object
@@ -539,7 +541,7 @@ void printSensorDataFloat(ICM_20948_SPI *sensor)
   SERIAL_PORT.println();
 }
 
-//
+//   ALKAA ALAPUOLELLA
 //   kirjastoihin mahdollisesti laitettavat SD funktiot 
 //
 
@@ -722,19 +724,17 @@ int createDataFile(fs::FS &fs, const char * dirname){
     }
     file = root.openNextFile();
   }
-  
   counter++;
-
   //tehdään datafilun nimen merkkijono
-  char str[20] = "";
+  char str[32] = "";
   sprintf(str,"/data/%d.csv",counter);
 
   writeFile(SD, str, "");
 
   return counter;
 }
-//
-//   kirjastoihin laitettavat SD funktiot loppuu
+//   LOPPUU
+//   kirjastoihin laitettavat SD funktiot 
 //
 
 void setup()
@@ -749,11 +749,7 @@ void setup()
   initMPU();
   initSDCard();
   //SD testikoodia
-  deleteFile(SD,"/data/test_data.csv");
-  writeFile(SD, "/data/test_data.csv", "");
   listDir(SD,"/",0);
-  listDir(SD,"/data",0);
-  createDataFile(SD,"/data");
 }
 
 void loop()
@@ -767,8 +763,13 @@ void loop()
   {
     Serial.println("Button 1 pressed");
     digitalWrite(LED1, !digitalRead(LED1));
+    createDataFlag = !createDataFlag;
     IMU = !IMU;
     delay(100);
+
+    if(createDataFlag){
+      dataFileIndex = createDataFile(SD,"/data");
+    }
   }
   btn1StateOld = btn1State;
   
@@ -809,7 +810,108 @@ void loop()
     myICM.getAGMT();
     //printRawAGMT( myICM.agmt );
     getSensorData(&myICM);
-    printSensorData();
+    //printSensorData();
+
+    char path[32];
+    char buffer[64];
+    int ret;
+    sprintf(path, "/data/%d.csv",dataFileIndex);
+
+    //tämä toteutus on _hirvittävä_, TODO: siivoa toistuvat rivit
+    for (int i=1;i<=9;i++){
+      switch(i){
+        case 1:
+          ret = snprintf(buffer,sizeof buffer,"%f,",gyroX);
+          if(ret<0){
+            Serial.print("Sensor data write to buffer FAILED\n");
+          }
+          if(ret>=sizeof buffer){
+            Serial.print("Result was truncated - check buffer size");
+          }
+          appendFile(SD,path,buffer);
+          break;
+        case 2:
+          ret = snprintf(buffer,sizeof buffer,"%f,",gyroY);
+          if(ret<0){
+            Serial.print("Sensor data write to buffer FAILED\n");
+          }
+          if(ret>=sizeof buffer){
+            Serial.print("Result was truncated - check buffer size");
+          }
+          appendFile(SD,path,buffer);
+          break;
+        case 3:
+          ret = snprintf(buffer,sizeof buffer,"%f,",gyroZ);
+          if(ret<0){
+            Serial.print("Sensor data write to buffer FAILED\n");
+          }
+          if(ret>=sizeof buffer){
+            Serial.print("Result was truncated - check buffer size");
+          }
+          appendFile(SD,path,buffer);
+          break;
+        case 4:
+          ret = snprintf(buffer,sizeof buffer,"%f,",accX);
+          if(ret<0){
+            Serial.print("Sensor data write to buffer FAILED\n");
+          }
+          if(ret>=sizeof buffer){
+            Serial.print("Result was truncated - check buffer size");
+          }
+          appendFile(SD,path,buffer);
+          break;
+        case 5:
+          ret = snprintf(buffer,sizeof buffer,"%f,",accY);
+          if(ret<0){
+            Serial.print("Sensor data write to buffer FAILED\n");
+          }
+          if(ret>=sizeof buffer){
+            Serial.print("Result was truncated - check buffer size");
+          }
+          appendFile(SD,path,buffer);
+          break;
+        case 6:
+          ret = snprintf(buffer,sizeof buffer,"%f,",accZ);
+          if(ret<0){
+            Serial.print("Sensor data write to buffer FAILED\n");
+          }
+          if(ret>=sizeof buffer){
+            Serial.print("Result was truncated - check buffer size");
+          }
+          appendFile(SD,path,buffer);
+          break;
+        case 7:
+          ret = snprintf(buffer,sizeof buffer,"%f,",magX);
+          if(ret<0){
+            Serial.print("Sensor data write to buffer FAILED\n");
+          }
+          if(ret>=sizeof buffer){
+            Serial.print("Result was truncated - check buffer size");
+          }
+          appendFile(SD,path,buffer);
+          break;
+        case 8:
+          ret = snprintf(buffer,sizeof buffer,"%f,",magY);
+          if(ret<0){
+            Serial.print("Sensor data write to buffer FAILED\n");
+          }
+          if(ret>=sizeof buffer){
+            Serial.print("Result was truncated - check buffer size");
+          }
+          appendFile(SD,path,buffer);
+          break;
+        case 9:
+          ret = snprintf(buffer,sizeof buffer,"%f\n",magZ);
+          if(ret<0){
+            Serial.print("Sensor data write to buffer FAILED\n");
+          }
+          if(ret>=sizeof buffer){
+            Serial.print("Result was truncated - check buffer size");
+          }
+          appendFile(SD,path,buffer);
+          break;
+      }
+    }
   }
   else
   {
