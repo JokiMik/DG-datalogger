@@ -168,6 +168,7 @@ void initSDCard(){
   uint64_t cardSize = SD.cardSize() / (1024 * 1024);
   Serial.printf("SD Card Size: %lluMB\n", cardSize);
 
+  //SD testikoodia
   listDir(SD, "/", 0);
   createDir(SD, "/mydir");
   listDir(SD, "/", 0);
@@ -182,6 +183,7 @@ void initSDCard(){
   testFileIO(SD, "/test.txt");
   Serial.printf("Total space: %lluMB\n", SD.totalBytes() / (1024 * 1024));
   Serial.printf("Used space: %lluMB\n", SD.usedBytes() / (1024 * 1024));
+  //SD testikoodi loppu
 }
 
 void initSPIFFS() {
@@ -543,6 +545,10 @@ void printSensorDataFloat(ICM_20948_SPI *sensor)
   SERIAL_PORT.println();
 }
 
+//
+//   kirjastoihin mahdollisesti laitettavat SD funktiot 
+//
+
 void listDir(fs::FS &fs, const char * dirname, uint8_t levels){
   Serial.printf("Listing directory: %s\n", dirname);
 
@@ -700,6 +706,43 @@ void testFileIO(fs::FS &fs, const char * path){
   file.close();
 }
 
+int createDataFile(fs::FS &fs, const char * dirname){
+  int counter = 0;
+  Serial.printf("Numeroidun datatiedoston luonti!\n");
+
+  File root = fs.open(dirname);
+  if(!root){
+    Serial.println("Failed to open directory");
+    return 0;
+  }
+  if(!root.isDirectory()){
+    Serial.println("Not a directory");
+    return 0;
+  }
+
+  File file = root.openNextFile();
+  while(file){
+    if(!file.isDirectory()){
+      counter++;
+      Serial.printf("Filujen määrä: %d\n",counter);
+    }
+    file = root.openNextFile();
+  }
+  
+  counter++;
+
+  //tehdään datafilun nimen merkkijono
+  char str[20] = "";
+  sprintf(str,"/data/%d.csv",counter);
+
+  writeFile(SD, str, "");
+
+  return counter;
+}
+//
+//   kirjastoihin laitettavat SD funktiot loppuu
+//
+
 void setup()
 {
   pinMode(LED1,OUTPUT);
@@ -711,7 +754,12 @@ void setup()
   //initSPIFFS();  //ESP32 internal file system
   initMPU();
   initSDCard();
-
+  //SD testikoodia
+  deleteFile(SD,"/data/test_data.csv");
+  writeFile(SD, "/data/test_data.csv", "");
+  listDir(SD,"/",0);
+  listDir(SD,"/data",0);
+  createDataFile(SD,"/data");
 }
 
 void loop()
