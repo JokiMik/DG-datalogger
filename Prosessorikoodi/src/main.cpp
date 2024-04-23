@@ -93,7 +93,7 @@ unsigned long lastTimeMag = 0;
 unsigned long magDelay = 100;
 unsigned long gyroDelay = 10;
 unsigned long temperatureDelay = 1000;
-unsigned long accelerometerDelay = 200;
+unsigned long accelerometerDelay = 10;
 
 float gyroX, gyroY, gyroZ;
 float accX, accY, accZ;
@@ -141,7 +141,8 @@ void initMPU(){
 
 void initSDCard(){
   spi.begin(14,12,13,15);
-  if(!SD.begin(15,spi,8000000)){
+  delay(100);
+  if(!SD.begin(15,spi,4000000)){
     Serial.println("Card Mount Failed");
     return;
   }
@@ -788,8 +789,10 @@ void loop()
     {
       server.end();
       Serial.println("Server stopped");
-      WiFi.disconnect();
+      WiFi.disconnect(true);
       Serial.println("Wifi disconnected");
+      WiFi.mode(WIFI_OFF);
+      Serial.println("Wifi off");
     }
     delay(100);
   }
@@ -923,7 +926,7 @@ void loop()
   
   //Send data to the web server
 
-  if(wifi)
+  if(wifi && IMU)
   {
     if ((millis() - lastTime) > gyroDelay) {
     // Send Events to the Web Server with the Sensor Readings
