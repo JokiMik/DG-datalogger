@@ -52,6 +52,11 @@ bool IMU = false;
 bool createDataFlag = false;
 int dataFileIndex;
 
+//Stopflag variables
+unsigned long stopFlagTime = 0;
+bool stopFlag = false;
+
+
 #ifdef USE_SPI
 ICM_20948_SPI myICM; // If using SPI create an ICM_20948_SPI object
 #else
@@ -85,7 +90,7 @@ AsyncEventSource events("/events");
 // Json Variable to Hold Sensor Readings
 JSONVar readings;
 
-// Timer variables
+//Web Server Timer variables
 unsigned long lastTime = 0;  
 unsigned long lastTimeTemperature = 0;
 unsigned long lastTimeAcc = 0;
@@ -94,6 +99,10 @@ unsigned long magDelay = 100;
 unsigned long gyroDelay = 10;
 unsigned long temperatureDelay = 1000;
 unsigned long accelerometerDelay = 10;
+
+
+//
+unsigned long currentTime = 0;
 
 float gyroX, gyroY, gyroZ;
 float accX, accY, accZ;
@@ -766,8 +775,6 @@ void loop()
     digitalWrite(LED1, !digitalRead(LED1));
     createDataFlag = !createDataFlag;
     IMU = !IMU;
-    delay(100);
-
     if(createDataFlag){
       dataFileIndex = createDataFile(SD,"/data");
     }
@@ -780,7 +787,6 @@ void loop()
     Serial.println("Button 2 pressed");
     digitalWrite(LED2, !digitalRead(LED2));
     wifi = !wifi;
-    Serial.println("Wifi boolean: " + wifi);
     if(wifi)
     {
       setupWiFi();
@@ -808,122 +814,148 @@ void loop()
   // Read the sensor data
   if(IMU)
   {
-     if (myICM.dataReady())
-  {
-    myICM.getAGMT();
-    //printRawAGMT( myICM.agmt );
-    getSensorData(&myICM);
-    //printSensorData();
-
-    char path[32];
-    char buffer[64];
-    int ret;
-    sprintf(path, "/data/%d.csv",dataFileIndex);
-
-    //tämä toteutus on _hirvittävä_, TODO: siivoa toistuvat rivit
-    for (int i=1;i<=9;i++){
-      switch(i){
-        case 1:
-          ret = snprintf(buffer,sizeof buffer,"%f,",gyroX);
-          if(ret<0){
-            Serial.print("Sensor data write to buffer FAILED\n");
-          }
-          if(ret>=sizeof buffer){
-            Serial.print("Result was truncated - check buffer size");
-          }
-          appendFile(SD,path,buffer);
-          break;
-        case 2:
-          ret = snprintf(buffer,sizeof buffer,"%f,",gyroY);
-          if(ret<0){
-            Serial.print("Sensor data write to buffer FAILED\n");
-          }
-          if(ret>=sizeof buffer){
-            Serial.print("Result was truncated - check buffer size");
-          }
-          appendFile(SD,path,buffer);
-          break;
-        case 3:
-          ret = snprintf(buffer,sizeof buffer,"%f,",gyroZ);
-          if(ret<0){
-            Serial.print("Sensor data write to buffer FAILED\n");
-          }
-          if(ret>=sizeof buffer){
-            Serial.print("Result was truncated - check buffer size");
-          }
-          appendFile(SD,path,buffer);
-          break;
-        case 4:
-          ret = snprintf(buffer,sizeof buffer,"%f,",accX);
-          if(ret<0){
-            Serial.print("Sensor data write to buffer FAILED\n");
-          }
-          if(ret>=sizeof buffer){
-            Serial.print("Result was truncated - check buffer size");
-          }
-          appendFile(SD,path,buffer);
-          break;
-        case 5:
-          ret = snprintf(buffer,sizeof buffer,"%f,",accY);
-          if(ret<0){
-            Serial.print("Sensor data write to buffer FAILED\n");
-          }
-          if(ret>=sizeof buffer){
-            Serial.print("Result was truncated - check buffer size");
-          }
-          appendFile(SD,path,buffer);
-          break;
-        case 6:
-          ret = snprintf(buffer,sizeof buffer,"%f,",accZ);
-          if(ret<0){
-            Serial.print("Sensor data write to buffer FAILED\n");
-          }
-          if(ret>=sizeof buffer){
-            Serial.print("Result was truncated - check buffer size");
-          }
-          appendFile(SD,path,buffer);
-          break;
-        case 7:
-          ret = snprintf(buffer,sizeof buffer,"%f,",magX);
-          if(ret<0){
-            Serial.print("Sensor data write to buffer FAILED\n");
-          }
-          if(ret>=sizeof buffer){
-            Serial.print("Result was truncated - check buffer size");
-          }
-          appendFile(SD,path,buffer);
-          break;
-        case 8:
-          ret = snprintf(buffer,sizeof buffer,"%f,",magY);
-          if(ret<0){
-            Serial.print("Sensor data write to buffer FAILED\n");
-          }
-          if(ret>=sizeof buffer){
-            Serial.print("Result was truncated - check buffer size");
-          }
-          appendFile(SD,path,buffer);
-          break;
-        case 9:
-          ret = snprintf(buffer,sizeof buffer,"%f\n",magZ);
-          if(ret<0){
-            Serial.print("Sensor data write to buffer FAILED\n");
-          }
-          if(ret>=sizeof buffer){
-            Serial.print("Result was truncated - check buffer size");
-          }
-          appendFile(SD,path,buffer);
-          break;
+    if(abs(gyroZ) > 10) //Jos rpm 100
+    {
+      if (millis() - stopFlagTime > 2000) //Ehdon pitää olla voimassa 2 sekuntia 
+      {
+        stopFlag = true;
+        stopFlagTime = millis();
       }
     }
+    if(stopFlag && abs(gyroZ) < 1)
+    {
+      if (millis() - lastTime > 2000) 
+      {
+        IMU = false;
+        stopFlag = false;
+        digitalWrite(LED1, LOW);
+        lastTime = millis();
+      }
+    }
+    if (myICM.dataReady())
+    {
+      myICM.getAGMT();
+      //printRawAGMT( myICM.agmt );
+      getSensorData(&myICM);
+      //printSensorData();
+      currentTime = millis();
+      char path[32];
+      char buffer[64];
+      int ret;
+      sprintf(path, "/data/%d.csv",dataFileIndex);
+
+      //tämä toteutus on _hirvittävä_, TODO: siivoa toistuvat rivit
+      for (int i=1;i<=10;i++){
+        switch(i){
+          case 1:
+            ret = snprintf(buffer,sizeof buffer,"%f,",gyroX);
+            if(ret<0){
+              Serial.print("Sensor data write to buffer FAILED\n");
+            }
+            if(ret>=sizeof buffer){
+              Serial.print("Result was truncated - check buffer size");
+            }
+            appendFile(SD,path,buffer);
+            break;
+          case 2:
+            ret = snprintf(buffer,sizeof buffer,"%f,",gyroY);
+            if(ret<0){
+              Serial.print("Sensor data write to buffer FAILED\n");
+            }
+            if(ret>=sizeof buffer){
+              Serial.print("Result was truncated - check buffer size");
+            }
+            appendFile(SD,path,buffer);
+            break;
+          case 3:
+            ret = snprintf(buffer,sizeof buffer,"%f,",gyroZ);
+            if(ret<0){
+              Serial.print("Sensor data write to buffer FAILED\n");
+            }
+            if(ret>=sizeof buffer){
+              Serial.print("Result was truncated - check buffer size");
+            }
+            appendFile(SD,path,buffer);
+            break;
+          case 4:
+            ret = snprintf(buffer,sizeof buffer,"%f,",accX);
+            if(ret<0){
+              Serial.print("Sensor data write to buffer FAILED\n");
+            }
+            if(ret>=sizeof buffer){
+              Serial.print("Result was truncated - check buffer size");
+            }
+            appendFile(SD,path,buffer);
+            break;
+          case 5:
+            ret = snprintf(buffer,sizeof buffer,"%f,",accY);
+            if(ret<0){
+              Serial.print("Sensor data write to buffer FAILED\n");
+            }
+            if(ret>=sizeof buffer){
+              Serial.print("Result was truncated - check buffer size");
+            }
+            appendFile(SD,path,buffer);
+            break;
+          case 6:
+            ret = snprintf(buffer,sizeof buffer,"%f,",accZ);
+            if(ret<0){
+              Serial.print("Sensor data write to buffer FAILED\n");
+            }
+            if(ret>=sizeof buffer){
+              Serial.print("Result was truncated - check buffer size");
+            }
+            appendFile(SD,path,buffer);
+            break;
+          case 7:
+            ret = snprintf(buffer,sizeof buffer,"%f,",magX);
+            if(ret<0){
+              Serial.print("Sensor data write to buffer FAILED\n");
+            }
+            if(ret>=sizeof buffer){
+              Serial.print("Result was truncated - check buffer size");
+            }
+            appendFile(SD,path,buffer);
+            break;
+          case 8:
+            ret = snprintf(buffer,sizeof buffer,"%f,",magY);
+            if(ret<0){
+              Serial.print("Sensor data write to buffer FAILED\n");
+            }
+            if(ret>=sizeof buffer){
+              Serial.print("Result was truncated - check buffer size");
+            }
+            appendFile(SD,path,buffer);
+            break;
+          case 9:
+            ret = snprintf(buffer,sizeof buffer,"%f,",magZ);
+            if(ret<0){
+              Serial.print("Sensor data write to buffer FAILED\n");
+            }
+            if(ret>=sizeof buffer){
+              Serial.print("Result was truncated - check buffer size");
+            }
+            appendFile(SD,path,buffer);
+            break;
+            case 10:
+            ret = snprintf(buffer,sizeof buffer,"%d\n",currentTime);
+            if(ret<0){
+              Serial.print("Sensor data write to buffer FAILED\n");
+            }
+            if(ret>=sizeof buffer){
+              Serial.print("Result was truncated - check buffer size");
+            }
+            appendFile(SD,path,buffer);
+            break;
+        }
+      }
+    }
+    else
+    {
+      SERIAL_PORT.println("Waiting for data");
+      delay(500);
+    }
   }
-  else
-  {
-    SERIAL_PORT.println("Waiting for data");
-    delay(500);
-  }
-  }
-  
-  
   //Send data to the web server
 
   if(wifi && IMU)
