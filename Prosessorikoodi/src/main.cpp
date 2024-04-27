@@ -54,6 +54,7 @@ int dataFileIndex;
 
 //Stopflag variables
 unsigned long stopFlagTime = 0;
+unsigned long startFlagTime = 0;
 bool stopFlag = false;
 
 
@@ -73,7 +74,6 @@ void appendFile(fs::FS &fs, const char * path, const char * message);
 void renameFile(fs::FS &fs, const char * path1, const char * path2);
 void deleteFile(fs::FS &fs, const char * path);
 void testFileIO(fs::FS &fs, const char * path);
-
 
 SPIClass spi = SPIClass(HSPI); //SD Card SPI
 
@@ -108,11 +108,6 @@ float gyroX, gyroY, gyroZ;
 float accX, accY, accZ;
 float magX, magY, magZ;
 float temperature;
-
-//Gyroscope sensor deviation
-float gyroXerror = 0.07;
-float gyroYerror = 0.03;
-float gyroZerror = 0.01;
 
 void initMPU(){
   #ifdef USE_SPI
@@ -173,30 +168,6 @@ void initSDCard(){
   }
   uint64_t cardSize = SD.cardSize() / (1024 * 1024);
   Serial.printf("SD Card Size: %lluMB\n", cardSize);
-
-  //SD testikoodia
-  listDir(SD, "/", 0);
-  createDir(SD, "/mydir");
-  listDir(SD, "/", 0);
-  removeDir(SD, "/mydir");
-  listDir(SD, "/", 2);
-  writeFile(SD, "/hello.txt", "Hello ");
-  appendFile(SD, "/hello.txt", "World!\n");
-  readFile(SD, "/hello.txt");
-  deleteFile(SD, "/foo.txt");
-  renameFile(SD, "/hello.txt", "/foo.txt");
-  readFile(SD, "/foo.txt");
-  testFileIO(SD, "/test.txt");
-  Serial.printf("Total space: %lluMB\n", SD.totalBytes() / (1024 * 1024));
-  Serial.printf("Used space: %lluMB\n", SD.usedBytes() / (1024 * 1024));
-  //SD testikoodi loppu
-}
-
-void initSPIFFS() {
-  if (!SPIFFS.begin()) {
-    SERIAL_PORT.println("An error has occurred while mounting SPIFFS");
-  }
-  SERIAL_PORT.println("SPIFFS mounted successfully");
 }
 
 // Initialize WiFi
@@ -213,25 +184,11 @@ void initWiFi() {
   SERIAL_PORT.println(WiFi.localIP());
 }
 
+//String funktiot web servua varten
 String getGyroReadings(){
-  /* float gyroX_temp = gyroX;
-  if(abs(gyroX_temp) > gyroXerror)  {
-    gyroX += gyroX_temp/50.00;
-  }
-  
-  float gyroY_temp = gyroY;
-  if(abs(gyroY_temp) > gyroYerror) {
-    gyroY += gyroY_temp/70.00;
-  }
-
-  float gyroZ_temp = gyroZ;
-  if(abs(gyroZ_temp) > gyroZerror) {
-    gyroZ += gyroZ_temp/90.00;
-  } */
   readings["gyroX"] = String(gyroX);
   readings["gyroY"] = String(gyroY);
   readings["gyroZ"] = String(gyroZ);
-
   String jsonString = JSON.stringify(readings);
   return jsonString;
 }
@@ -255,6 +212,11 @@ String getTemperature(){
   return String(temperature);
 }
 
+String getSDCardSize(){
+  uint64_t cardSize = SD.cardSize() / (1024 * 1024);
+  return String(cardSize);
+}
+
 void setupWiFi(){
   // Handle Web Server
   if(wifi)
@@ -267,9 +229,8 @@ void setupWiFi(){
   server.serveStatic("/", SD, "/");
 
   server.on("/reset", HTTP_GET, [](AsyncWebServerRequest *request){
-    gyroX=0;
-    gyroY=0;
-    gyroZ=0;
+    //Tää funktio ei resetoi mitään vaan lähettää sd kortin tiedon web serverille
+    events.send(getSDCardSize().c_str(),"SDcard_reading",millis());
     request->send(200, "text/plain", "OK");
   });
 
@@ -355,202 +316,6 @@ void printSensorData()
   SERIAL_PORT.println();
 }
 
-
-
-
-// Below here are some helper functions to print the data nicely!
-
-void printPaddedInt16b(int16_t val)
-{
-  if (val > 0)
-  {
-    SERIAL_PORT.print(" ");
-    if (val < 10000)
-    {
-      SERIAL_PORT.print("0");
-    }
-    if (val < 1000)
-    {
-      SERIAL_PORT.print("0");
-    }
-    if (val < 100)
-    {
-      SERIAL_PORT.print("0");
-    }
-    if (val < 10)
-    {
-      SERIAL_PORT.print("0");
-    }
-  }
-  else
-  {
-    SERIAL_PORT.print("-");
-    if (abs(val) < 10000)
-    {
-      SERIAL_PORT.print("0");
-    }
-    if (abs(val) < 1000)
-    {
-      SERIAL_PORT.print("0");
-    }
-    if (abs(val) < 100)
-    {
-      SERIAL_PORT.print("0");
-    }
-    if (abs(val) < 10)
-    {
-      SERIAL_PORT.print("0");
-    }
-  }
-  SERIAL_PORT.print(abs(val));
-}
-
-void printRawAGMT(ICM_20948_AGMT_t agmt)
-{
-  SERIAL_PORT.print("RAW. Acc [ ");
-  printPaddedInt16b(agmt.acc.axes.x);
-  SERIAL_PORT.print(", ");
-  printPaddedInt16b(agmt.acc.axes.y);
-  SERIAL_PORT.print(", ");
-  printPaddedInt16b(agmt.acc.axes.z);
-  SERIAL_PORT.print(" ], Gyr [ ");
-  printPaddedInt16b(agmt.gyr.axes.x);
-  SERIAL_PORT.print(", ");
-  printPaddedInt16b(agmt.gyr.axes.y);
-  SERIAL_PORT.print(", ");
-  printPaddedInt16b(agmt.gyr.axes.z);
-  SERIAL_PORT.print(" ], Mag [ ");
-  printPaddedInt16b(agmt.mag.axes.x);
-  SERIAL_PORT.print(", ");
-  printPaddedInt16b(agmt.mag.axes.y);
-  SERIAL_PORT.print(", ");
-  printPaddedInt16b(agmt.mag.axes.z);
-  SERIAL_PORT.print(" ], Tmp [ ");
-  printPaddedInt16b(agmt.tmp.val);
-  SERIAL_PORT.print(" ]");
-  SERIAL_PORT.println();
-}
-
-void printFormattedFloat(float val, uint8_t leading, uint8_t decimals)
-{
-  float aval = abs(val);
-  if (val < 0)
-  {
-    SERIAL_PORT.print("-");
-  }
-  else
-  {
-    SERIAL_PORT.print(" ");
-  }
-  for (uint8_t indi = 0; indi < leading; indi++)
-  {
-    uint32_t tenpow = 0;
-    if (indi < (leading - 1))
-    {
-      tenpow = 1;
-    }
-    for (uint8_t c = 0; c < (leading - 1 - indi); c++)
-    {
-      tenpow *= 10;
-    }
-    if (aval < tenpow)
-    {
-      SERIAL_PORT.print("0");
-    }
-    else
-    {
-      break;
-    }
-  }
-  if (val < 0)
-  {
-    SERIAL_PORT.print(-val, decimals);
-  }
-  else
-  {
-    SERIAL_PORT.print(val, decimals);
-  }
-}
-
-#ifdef USE_SPI
-void printScaledAGMT(ICM_20948_SPI *sensor)
-{
-#else
-void printScaledAGMT(ICM_20948_I2C *sensor)
-{
-#endif
-  SERIAL_PORT.print("\t\tTemperature ");
-  printFormattedFloat(sensor->temp(), 5, 2);
-  SERIAL_PORT.println(" deg C");
-
-  SERIAL_PORT.print("\t\tAccel X: ");
-  printFormattedFloat(sensor->accX() * 0.00980665, 5, 2);
-  SERIAL_PORT.print(" \tY: ");
-  printFormattedFloat(sensor->accY() * 0.00980665, 5, 2);
-  SERIAL_PORT.print(" \tZ: ");
-  printFormattedFloat(sensor->accZ() * 0.00980665, 5, 2);
-  SERIAL_PORT.println(" m/s^2 ");
-
-  SERIAL_PORT.print("\t\tGyro X: ");
-  printFormattedFloat(sensor->gyrX() * 0.1666667, 5, 2);
-  SERIAL_PORT.print(" \tY: ");
-  printFormattedFloat(sensor->gyrY() * 0.1666667, 5, 2);
-  SERIAL_PORT.print(" \tZ: ");
-  printFormattedFloat(sensor->gyrZ() * 0.1666667, 5, 2);
-  SERIAL_PORT.println(" rpm");
-
-  SERIAL_PORT.print("\t\tMag X: ");
-  printFormattedFloat(sensor->magX(), 5, 2);
-  SERIAL_PORT.print(" \tY: ");
-  printFormattedFloat(sensor->magY(), 5, 2);
-  SERIAL_PORT.print(" \tZ: ");
-  printFormattedFloat(sensor->magZ(), 5, 2);
-  SERIAL_PORT.println(" uT");
-  SERIAL_PORT.println();
-
-}
-void printSensorDataFloat(ICM_20948_SPI *sensor)
-{
-  SERIAL_PORT.print("\t\tTemperature ");
-  float temp = sensor->temp();
-  SERIAL_PORT.print(temp);
-  SERIAL_PORT.println(" deg C");
-
-  SERIAL_PORT.print("\t\tAccel X: ");
-  float accX = sensor->accX() * 0.00980665;
-  SERIAL_PORT.print(accX);
-  SERIAL_PORT.print(" \tY: ");
-  float accY = sensor->accY() * 0.00980665;
-  SERIAL_PORT.print(accY);
-  SERIAL_PORT.print(" \tZ: ");
-  float accZ = sensor->accZ() * 0.00980665;
-  SERIAL_PORT.print(accZ);
-  SERIAL_PORT.println(" m/s^2 ");
-
-  SERIAL_PORT.print("\t\tGyro X: ");
-  float gyrX = sensor->gyrX() * 0.1666667;
-  SERIAL_PORT.print(gyrX);
-  SERIAL_PORT.print(" \tY: ");
-  float gyrY = sensor->gyrY() * 0.1666667;
-  SERIAL_PORT.print(gyrY);
-  SERIAL_PORT.print(" \tZ: ");
-  float gyrZ = sensor->gyrZ() * 0.1666667;
-  SERIAL_PORT.print(gyrZ);
-  SERIAL_PORT.println(" rpm");
-
-  SERIAL_PORT.print("\t\tMag X: ");
-  float magX = sensor->magX();
-  SERIAL_PORT.print(magX);
-  SERIAL_PORT.print(" \tY: ");
-  float magY = sensor->magY();
-  SERIAL_PORT.print(magY);
-  SERIAL_PORT.print(" \tZ: ");
-  float magZ = sensor->magZ();
-  SERIAL_PORT.print(magZ);
-  SERIAL_PORT.println(" uT");
-  SERIAL_PORT.println();
-}
-
 //   ALKAA ALAPUOLELLA
 //   kirjastoihin mahdollisesti laitettavat SD funktiot 
 //
@@ -628,16 +393,16 @@ void writeFile(fs::FS &fs, const char * path, const char * message){
     Serial.println("Failed to open file for writing");
     return;
   }
-  if(file.print(message)){
+/*   if(file.print(message)){
     Serial.println("File written");
   } else {
     Serial.println("Write failed");
-  }
+  } */
   file.close();
 }
 
 void appendFile(fs::FS &fs, const char * path, const char * message){
-  Serial.printf("Appending to file: %s\n", path);
+  //Serial.printf("Appending to file: %s\n", path);
 
   File file = fs.open(path, FILE_APPEND);
   if(!file){
@@ -645,7 +410,7 @@ void appendFile(fs::FS &fs, const char * path, const char * message){
     return;
   }
   if(file.print(message)){
-      Serial.println("Message appended");
+      //Serial.println("Message appended");
   } else {
     Serial.println("Append failed");
   }
@@ -814,24 +579,45 @@ void loop()
   // Read the sensor data
   if(IMU)
   {
-    if(abs(gyroZ) > 10) //Jos rpm 100
+    if(!stopFlag && abs(gyroZ) > 10) //Jos rpm 100
     {
-      if (millis() - stopFlagTime > 2000) //Ehdon pitää olla voimassa 2 sekuntia 
+      if(startFlagTime == 0) // If this is the first time gyroZ is above 10
+      {
+        startFlagTime = millis();
+      }
+      else if (millis() - startFlagTime >= 2000) //Jos rpm voimassa x millisekuntia 
       {
         stopFlag = true;
-        stopFlagTime = millis();
+        Serial.println("Stop flag activated");
+        startFlagTime = 0;
       }
     }
+    else 
+    {
+      startFlagTime = 0; // Reset the timer if gyroZ is not above 10
+    }
+
     if(stopFlag && abs(gyroZ) < 1)
     {
-      if (millis() - lastTime > 2000) 
+      if(stopFlagTime == 0)
+      {
+        stopFlagTime = millis();
+      }
+      else if (millis() - startFlagTime >= 2000)
       {
         IMU = false;
         stopFlag = false;
         digitalWrite(LED1, LOW);
-        lastTime = millis();
+        stopFlagTime = millis();
+        Serial.println("Stop flag deactivated");
+        stopFlagTime = 0;
       }
     }
+    else 
+    {
+      stopFlagTime = 0;
+    }
+
     if (myICM.dataReady())
     {
       myICM.getAGMT();

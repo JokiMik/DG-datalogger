@@ -91,6 +91,12 @@ if (!!window.EventSource) {
     renderer.render(scene, camera);
   }, false);
 
+  //Reads SD card size
+  source.addEventListener('SDcard_reading', function(e) {
+    console.log("SDcard_reading", e.data);
+    document.getElementById("SDcard").innerHTML = e.data;
+  }, false);
+
   source.addEventListener('temperature_reading', function(e) {
     console.log("temperature_reading", e.data);
     document.getElementById("temp").innerHTML = e.data;
