@@ -97,6 +97,16 @@ if (!!window.EventSource) {
     document.getElementById("SDcard").innerHTML = e.data;
   }, false);
 
+  source.addEventListener('SDcard_file_count', function(e) {
+    console.log("SDcard_file_count", e.data);
+    document.getElementById("SDfilecount").innerHTML = e.data;
+  }, false);
+
+  source.addEventListener('autostop_reading', function(e) {
+    console.log("autostop_reading", e.data);
+    document.getElementById("auto").innerHTML = e.data;
+  }, false);
+
   source.addEventListener('temperature_reading', function(e) {
     console.log("temperature_reading", e.data);
     document.getElementById("temp").innerHTML = e.data;
@@ -119,7 +129,7 @@ if (!!window.EventSource) {
   }, false);
 }
 
-function resetPosition(element){
+function sendCommand(element){
   var xhr = new XMLHttpRequest();
   xhr.open("GET", "/"+element.id, true);
   console.log(element.id);

@@ -22,6 +22,15 @@
   <div class="content">
     <div class="cards">
       <div class="card">
+        <p class="card-title">AUTO STOP ON/OFF</p>
+        <p><button id="autostop" onclick="sendCommand(this)">SET</button></p>
+        <p><span class="reading">STATUS: <span id="auto"></span> </span></p>
+      </div>
+      <div class="card">
+        <p class="card-title">MEASURE</p>
+        <p><button id="startstop" onclick="sendCommand(this)">START/STOP</button></p>
+      </div>
+      <div class="card">
         <p class="card-title">GYROSCOPE</p>
         <p><span class="reading">X: <span id="gyroX"></span> radians/s</span></p>
         <p><span class="reading">Y: <span id="gyroY"></span> radians/s</span></p>
@@ -42,13 +51,13 @@
       <div class="card">
         <p class="card-title">TEMPERATURE</p>
         <p><span class="reading"><span id="temp"></span> &deg;C</span></p>
-        <p class="card-title">SD CARD</p>
+      </div>
+      <div class="card">
+        <p class="card-title">TEST SD CARD</p>
+        <p><button id="filecount" onclick="sendCommand(this)">GET FILE COUNT</button></p>
+        <p><span class="reading">FILES: <span id="SDfilecount"></span> </span></p>
+        <p><button id="cardsize" onclick="sendCommand(this)">GET CARD SIZE</button></p>
         <p><span class="reading">SIZE: <span id="SDcard"></span> MB</span></p>
-        <p><button id="reset" onclick="resetPosition(this)">TEST</button></p>
-        
-<!--    <button id="resetX" onclick="resetPosition(this)">X</button>
-        <button id="resetY" onclick="resetPosition(this)">Y</button>
-        <button id="resetZ" onclick="resetPosition(this)">Z</button> -->
       </div>
     </div>
     <div class="cube-content">

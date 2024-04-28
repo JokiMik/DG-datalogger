@@ -16,7 +16,7 @@
 #include <ESPAsyncWebServer.h>
 
 #include <Arduino_JSON.h>
-#include "SPIFFS.h"
+//#include "SPIFFS.h"
 
 #include "FS.h"
 #include "SD.h"
@@ -26,8 +26,10 @@
 
 #define SERIAL_PORT Serial
 
-#define SPI_PORT SPI // Your desired SPI port.       Used only when "USE_SPI" is defined
-#define CS_PIN 5     // Which pin you connect CS to. Used only when "USE_SPI" is defined
+#define SPI_PORT SPI     // Your desired SPI port.       Used only when "USE_SPI" is defined
+#define SPI_FREQ 4000000 // You can override the default SPI frequency
+#define CS_PIN 5         // Which pin you connect CS to. Used only when "USE_SPI" is defined
+
 
 #define WIRE_PORT Wire // Your desired Wire port.      Used when "USE_SPI" is not defined
 // The value of the last bit of the I2C address.
@@ -56,7 +58,7 @@ int dataFileIndex;
 unsigned long stopFlagTime = 0;
 unsigned long startFlagTime = 0;
 bool stopFlag = false;
-
+bool autoStop = true;
 
 #ifdef USE_SPI
 ICM_20948_SPI myICM; // If using SPI create an ICM_20948_SPI object
@@ -74,6 +76,7 @@ void appendFile(fs::FS &fs, const char * path, const char * message);
 void renameFile(fs::FS &fs, const char * path1, const char * path2);
 void deleteFile(fs::FS &fs, const char * path);
 void testFileIO(fs::FS &fs, const char * path);
+int createDataFile(fs::FS &fs, const char * dirname);
 
 SPIClass spi = SPIClass(HSPI); //SD Card SPI
 
@@ -110,7 +113,8 @@ float magX, magY, magZ;
 float temperature;
 
 void initMPU(){
-  #ifdef USE_SPI
+  //Example2_Advanced.ino
+#ifdef USE_SPI
   SPI_PORT.begin();
 #else
   WIRE_PORT.begin();
@@ -124,7 +128,7 @@ void initMPU(){
   {
 
 #ifdef USE_SPI
-    myICM.begin(CS_PIN, SPI_PORT);
+    myICM.begin(CS_PIN, SPI_PORT, SPI_FREQ); // Here we are using the user-defined SPI_FREQ as the clock speed of the SPI bus
 #else
     myICM.begin(WIRE_PORT, AD0_VAL);
 #endif
@@ -141,6 +145,103 @@ void initMPU(){
       initialized = true;
     }
   }
+  // In this advanced example we'll cover how to do a more fine-grained setup of your sensor
+  SERIAL_PORT.println("Device connected!");
+
+  // Here we are doing a SW reset to make sure the device starts in a known state
+  myICM.swReset();
+  if (myICM.status != ICM_20948_Stat_Ok)
+  {
+    SERIAL_PORT.print(F("Software Reset returned: "));
+    SERIAL_PORT.println(myICM.statusString());
+  }
+  delay(250);
+
+  // Now wake the sensor up
+  myICM.sleep(false);
+  myICM.lowPower(false);
+
+  // The next few configuration functions accept a bit-mask of sensors for which the settings should be applied.
+
+  // Set Gyro and Accelerometer to a particular sample mode
+  // options: ICM_20948_Sample_Mode_Continuous
+  //          ICM_20948_Sample_Mode_Cycled
+  myICM.setSampleMode((ICM_20948_Internal_Acc | ICM_20948_Internal_Gyr), ICM_20948_Sample_Mode_Continuous);
+  if (myICM.status != ICM_20948_Stat_Ok)
+  {
+    SERIAL_PORT.print(F("setSampleMode returned: "));
+    SERIAL_PORT.println(myICM.statusString());
+  }
+  
+  // Set full scale ranges for both acc and gyr
+  ICM_20948_fss_t myFSS; // This uses a "Full Scale Settings" structure that can contain values for all configurable sensors
+
+  myFSS.a = gpm16; // (ICM_20948_ACCEL_CONFIG_FS_SEL_e)
+                  // gpm2
+                  // gpm4
+                  // gpm8
+                  // gpm16
+
+  myFSS.g = dps2000; // (ICM_20948_GYRO_CONFIG_1_FS_SEL_e)
+                    // dps250
+                    // dps500
+                    // dps1000
+                    // dps2000
+
+  myICM.setFullScale((ICM_20948_Internal_Acc | ICM_20948_Internal_Gyr), myFSS);
+  if (myICM.status != ICM_20948_Stat_Ok)
+  {
+    SERIAL_PORT.print(F("setFullScale returned: "));
+    SERIAL_PORT.println(myICM.statusString());
+  }
+
+  // Set up Digital Low-Pass Filter configuration
+  ICM_20948_dlpcfg_t myDLPcfg;    // Similar to FSS, this uses a configuration structure for the desired sensors
+  myDLPcfg.a = acc_d473bw_n499bw; // (ICM_20948_ACCEL_CONFIG_DLPCFG_e)
+                                  // acc_d246bw_n265bw      - means 3db bandwidth is 246 hz and nyquist bandwidth is 265 hz
+                                  // acc_d111bw4_n136bw
+                                  // acc_d50bw4_n68bw8
+                                  // acc_d23bw9_n34bw4
+                                  // acc_d11bw5_n17bw
+                                  // acc_d5bw7_n8bw3        - means 3 db bandwidth is 5.7 hz and nyquist bandwidth is 8.3 hz
+                                  // acc_d473bw_n499bw
+
+  myDLPcfg.g = gyr_d361bw4_n376bw5; // (ICM_20948_GYRO_CONFIG_1_DLPCFG_e)
+                                    // gyr_d196bw6_n229bw8
+                                    // gyr_d151bw8_n187bw6
+                                    // gyr_d119bw5_n154bw3
+                                    // gyr_d51bw2_n73bw3
+                                    // gyr_d23bw9_n35bw9
+                                    // gyr_d11bw6_n17bw8
+                                    // gyr_d5bw7_n8bw9
+                                    // gyr_d361bw4_n376bw5
+
+  myICM.setDLPFcfg((ICM_20948_Internal_Acc | ICM_20948_Internal_Gyr), myDLPcfg);
+  if (myICM.status != ICM_20948_Stat_Ok)
+  {
+    SERIAL_PORT.print(F("setDLPcfg returned: "));
+    SERIAL_PORT.println(myICM.statusString());
+  }
+
+  // Choose whether or not to use DLPF
+  // Here we're also showing another way to access the status values, and that it is OK to supply individual sensor masks to these functions
+  ICM_20948_Status_e accDLPEnableStat = myICM.enableDLPF(ICM_20948_Internal_Acc, false);
+  ICM_20948_Status_e gyrDLPEnableStat = myICM.enableDLPF(ICM_20948_Internal_Gyr, false);
+  SERIAL_PORT.print(F("Enable DLPF for Accelerometer returned: "));
+  SERIAL_PORT.println(myICM.statusString(accDLPEnableStat));
+  SERIAL_PORT.print(F("Enable DLPF for Gyroscope returned: "));
+  SERIAL_PORT.println(myICM.statusString(gyrDLPEnableStat));
+
+  // Choose whether or not to start the magnetometer
+  myICM.startupMagnetometer();
+  if (myICM.status != ICM_20948_Stat_Ok)
+  {
+    SERIAL_PORT.print(F("startupMagnetometer returned: "));
+    SERIAL_PORT.println(myICM.statusString());
+  }
+
+  SERIAL_PORT.println();
+  SERIAL_PORT.println(F("Configuration complete!"));
 }
 
 void initSDCard(){
@@ -217,6 +318,42 @@ String getSDCardSize(){
   return String(cardSize);
 }
 
+String getFileCountInSDCard(){
+  File root = SD.open("/data");
+  int fileCount = 0;
+  while(true){
+    File entry =  root.openNextFile();
+    if (! entry){
+      // no more files
+      break;
+    }
+    fileCount++;
+    entry.close();
+  }
+  return String(fileCount);
+}
+
+String getAutoStop(){
+  autoStop = !autoStop;
+  if(autoStop){
+    Serial.println("AutoStop ON");
+    return "ON"; 
+  }
+  else
+  {
+    Serial.println("AutoStop OFF");
+    return "OFF";
+  }
+}
+void startStopMeasurement(){
+  digitalWrite(LED1, !digitalRead(LED1));
+  createDataFlag = !createDataFlag;
+  IMU = !IMU;
+  if(createDataFlag){
+    dataFileIndex = createDataFile(SD,"/data");
+  }
+}
+
 void setupWiFi(){
   // Handle Web Server
   if(wifi)
@@ -227,25 +364,24 @@ void setupWiFi(){
   });
 
   server.serveStatic("/", SD, "/");
+  
+  server.on("/startstop", HTTP_GET, [](AsyncWebServerRequest *request){
+    startStopMeasurement();
+    request->send(200, "text/plain", "OK");
+  });
 
-  server.on("/reset", HTTP_GET, [](AsyncWebServerRequest *request){
-    //Tää funktio ei resetoi mitään vaan lähettää sd kortin tiedon web serverille
+  server.on("/autostop", HTTP_GET, [](AsyncWebServerRequest *request){
+    events.send(getAutoStop().c_str(),"autostop_reading",millis());
+    request->send(200, "text/plain", "OK");
+  });
+
+  server.on("/cardsize", HTTP_GET, [](AsyncWebServerRequest *request){
     events.send(getSDCardSize().c_str(),"SDcard_reading",millis());
     request->send(200, "text/plain", "OK");
   });
 
-  server.on("/resetX", HTTP_GET, [](AsyncWebServerRequest *request){
-    gyroX=0;
-    request->send(200, "text/plain", "OK");
-  });
-
-  server.on("/resetY", HTTP_GET, [](AsyncWebServerRequest *request){
-    gyroY=0;
-    request->send(200, "text/plain", "OK");
-  });
-
-  server.on("/resetZ", HTTP_GET, [](AsyncWebServerRequest *request){
-    gyroZ=0;
+  server.on("/filecount", HTTP_GET, [](AsyncWebServerRequest *request){
+    events.send(getFileCountInSDCard().c_str(),"SDcard_file_count",millis());
     request->send(200, "text/plain", "OK");
   });
 
@@ -495,7 +631,7 @@ int createDataFile(fs::FS &fs, const char * dirname){
   while(file){
     if(!file.isDirectory()){
       counter++;
-      Serial.printf("Filujen määrä: %d\n",counter);
+      //Serial.printf("Filujen määrä: %d\n",counter);
     }
     file = root.openNextFile();
   }
@@ -537,12 +673,7 @@ void loop()
   if(btn1StateOld == HIGH && btn1State == LOW)
   {
     Serial.println("Button 1 pressed");
-    digitalWrite(LED1, !digitalRead(LED1));
-    createDataFlag = !createDataFlag;
-    IMU = !IMU;
-    if(createDataFlag){
-      dataFileIndex = createDataFile(SD,"/data");
-    }
+    startStopMeasurement();
   }
   btn1StateOld = btn1State;
   
@@ -579,45 +710,47 @@ void loop()
   // Read the sensor data
   if(IMU)
   {
-    if(!stopFlag && abs(gyroZ) > 10) //Jos rpm 100
+    if(autoStop)
     {
-      if(startFlagTime == 0) // If this is the first time gyroZ is above 10
+      if(!stopFlag && abs(gyroZ) > 10) //Jos rpm 100
       {
-        startFlagTime = millis();
+        if(startFlagTime == 0) // If this is the first time gyroZ is above 10
+        {
+          startFlagTime = millis();
+        }
+        else if (millis() - startFlagTime >= 2000) //Jos rpm voimassa x millisekuntia 
+        {
+          stopFlag = true;
+          Serial.println("Stop flag activated");
+          startFlagTime = 0;
+        }
       }
-      else if (millis() - startFlagTime >= 2000) //Jos rpm voimassa x millisekuntia 
+      else 
       {
-        stopFlag = true;
-        Serial.println("Stop flag activated");
-        startFlagTime = 0;
+        startFlagTime = 0; // Reset the timer if gyroZ is not above 10
       }
-    }
-    else 
-    {
-      startFlagTime = 0; // Reset the timer if gyroZ is not above 10
-    }
 
-    if(stopFlag && abs(gyroZ) < 1)
-    {
-      if(stopFlagTime == 0)
+      if(stopFlag && abs(gyroZ) < 1)
       {
-        stopFlagTime = millis();
+        if(stopFlagTime == 0)
+        {
+          stopFlagTime = millis();
+        }
+        else if (millis() - startFlagTime >= 2000)
+        {
+          IMU = false;
+          stopFlag = false;
+          digitalWrite(LED1, LOW);
+          stopFlagTime = millis();
+          Serial.println("Stop flag deactivated");
+          stopFlagTime = 0;
+        }
       }
-      else if (millis() - startFlagTime >= 2000)
+      else 
       {
-        IMU = false;
-        stopFlag = false;
-        digitalWrite(LED1, LOW);
-        stopFlagTime = millis();
-        Serial.println("Stop flag deactivated");
         stopFlagTime = 0;
       }
     }
-    else 
-    {
-      stopFlagTime = 0;
-    }
-
     if (myICM.dataReady())
     {
       myICM.getAGMT();
