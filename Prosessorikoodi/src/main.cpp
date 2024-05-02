@@ -1,26 +1,27 @@
 /****************************************************************
- * Example1_Basics.ino
+ * Example2_Advanced.ino
  * ICM 20948 Arduino Library Demo
- * Use the default configuration to stream 9-axis IMU data
+ * Shows how to use granular configuration of the ICM 20948
  * Owen Lyke @ SparkFun Electronics
  * Original Creation Date: April 17 2019
  *
  * Please see License.md for the license information.
  *
  * Distributed as-is; no warranty is given.
+ * 
+ * The ESP32 Web Server Code Example, created by Rui Santos, was utilized as a basis for this 
+ * project. Full credit and details can be found at https://randomnerdtutorials.com.
  ***************************************************************/
 #include "ICM_20948.h" // Click here to get the library: http://librarymanager/All#SparkFun_ICM_20948_IMU
 #include <Arduino.h>
 #include <WiFi.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
-
 #include <Arduino_JSON.h>
-//#include "SPIFFS.h"
-
 #include "FS.h"
 #include "SD.h"
 #include "SPI.h"
+#include <esp_log.h>
 
 #define USE_SPI       // Uncomment this to use SPI
 
@@ -38,8 +39,9 @@
 
 #define LED1 26
 #define LED2 27
+#define PWR_LED 10
 
-#define BTN1 10
+#define BTN1 25
 #define BTN2 9
 
 int btn1State = HIGH;
@@ -47,7 +49,8 @@ int btn2State = HIGH;
 
 int btn1StateOld = HIGH;
 int btn2StateOld = HIGH;
-//int bothButtonsPressed = HIGH;
+unsigned long btn1PressTime = 0;
+unsigned long btn2PressTime = 0;
 
 bool wifi = false;
 bool IMU = false;
@@ -99,9 +102,9 @@ unsigned long lastTimeTemperature = 0;
 unsigned long lastTimeAcc = 0;
 unsigned long lastTimeMag = 0;
 unsigned long magDelay = 100;
-unsigned long gyroDelay = 10;
+unsigned long gyroDelay = 100;
 unsigned long temperatureDelay = 1000;
-unsigned long accelerometerDelay = 10;
+unsigned long accelerometerDelay = 100;
 
 
 float gyroX, gyroY, gyroZ;
@@ -222,8 +225,8 @@ void initMPU(){
 
   // Choose whether or not to use DLPF
   // Here we're also showing another way to access the status values, and that it is OK to supply individual sensor masks to these functions
-  ICM_20948_Status_e accDLPEnableStat = myICM.enableDLPF(ICM_20948_Internal_Acc, false);
-  ICM_20948_Status_e gyrDLPEnableStat = myICM.enableDLPF(ICM_20948_Internal_Gyr, false);
+  ICM_20948_Status_e accDLPEnableStat = myICM.enableDLPF(ICM_20948_Internal_Acc, true);
+  ICM_20948_Status_e gyrDLPEnableStat = myICM.enableDLPF(ICM_20948_Internal_Gyr, true);
   SERIAL_PORT.print(F("Enable DLPF for Accelerometer returned: "));
   SERIAL_PORT.println(myICM.statusString(accDLPEnableStat));
   SERIAL_PORT.print(F("Enable DLPF for Gyroscope returned: "));
@@ -276,6 +279,8 @@ void initWiFi() {
   SERIAL_PORT.print("Connecting to WiFi...");
   while (WiFi.status() != WL_CONNECTED) {
     SERIAL_PORT.print(".");
+    digitalWrite(LED1, !digitalRead(LED1));
+    digitalWrite(LED2, !digitalRead(LED2));
     delay(1000);
   }
   SERIAL_PORT.println("");
@@ -333,12 +338,12 @@ String getFileCountInSDCard(){
 String getAutoStop(){
   autoStop = !autoStop;
   if(autoStop){
-    Serial.println("AutoStop ON");
+    //Serial.println("AutoStop ON");
     return "ON"; 
   }
   else
   {
-    Serial.println("AutoStop OFF");
+    //Serial.println("AutoStop OFF");
     return "OFF";
   }
 }
@@ -416,7 +421,7 @@ void getSensorData(ICM_20948_SPI *sensor)
   
   temperature = sensor->temp();
 
-  accX = sensor->accX() * 0.00980665;
+  accX = sensor->accX() * 0.00980665; //m/s^2
   accY = sensor->accY() * 0.00980665;
   accZ = sensor->accZ() * 0.00980665;
 
@@ -432,6 +437,7 @@ void getSensorData(ICM_20948_SPI *sensor)
 
 void printSensorData()
 {
+  unsigned long currentTime = millis();
   SERIAL_PORT.print("\t\tTemperature ");
   SERIAL_PORT.print(temperature);
   SERIAL_PORT.println(" deg C");
@@ -459,6 +465,9 @@ void printSensorData()
   SERIAL_PORT.print(" \tZ: ");
   SERIAL_PORT.print(magZ);
   SERIAL_PORT.println(" uT");
+
+  SERIAL_PORT.print("\t\tTime: ");
+  SERIAL_PORT.print(currentTime);
   SERIAL_PORT.println();
 }
 
@@ -624,7 +633,7 @@ void testFileIO(fs::FS &fs, const char * path){
 }
 
 int createDataFile(fs::FS &fs, const char * dirname){
-  int counter = 0;
+  int counter = 1;
   Serial.printf("Numeroidun datatiedoston luonti!\n");
 
   File root = fs.open(dirname);
@@ -661,7 +670,7 @@ int createDataFile(fs::FS &fs, const char * dirname){
 void saveDataToFile(){
   unsigned long currentTime = millis();
   char path[32];
-  char buffer[64];
+  char buffer[141];
   int ret;
   sprintf(path, "/data/%d.csv",dataFileIndex);
   
@@ -680,6 +689,24 @@ void saveDataToFile(){
   }
 }
 
+void setWiFiOnOff()
+{
+  digitalWrite(LED1, !digitalRead(LED1));
+  wifi = !wifi;
+  if(wifi)
+  {
+    setupWiFi();
+    Serial.println("Wifi on");
+  }
+  else
+  {
+    server.end();
+    WiFi.disconnect(true);
+    WiFi.mode(WIFI_OFF);
+    Serial.println("Wifi off");
+  }
+}
+
 void autoStopMeasurement(){
   if(!stopFlag && abs(gyroZ) > 10) //Jos rpm 100
   {
@@ -692,6 +719,10 @@ void autoStopMeasurement(){
       stopFlag = true;
       //Serial.println("Stop flag activated");
       startFlagTime = 0;
+      if(wifi)
+      {
+        setWiFiOnOff(); //When the stop flag is activated, turn off the WiFi radio
+      }
     }
   }
   else 
@@ -713,6 +744,10 @@ void autoStopMeasurement(){
       //Serial.println("Stop flag deactivated");
       stopFlagTime = 0;
       digitalWrite(LED2, LOW);
+      if(!wifi)
+      {
+        setWiFiOnOff(); //When the stop flag is deactivated, turn on the WiFi radio
+      }
     }
   }
   else 
@@ -721,19 +756,75 @@ void autoStopMeasurement(){
   }
 }
 
+void printDataCsv()
+{
+  unsigned long currentTime = millis();
+  SERIAL_PORT.print(gyroX);
+  SERIAL_PORT.print(",");
+  SERIAL_PORT.print(gyroY);
+  SERIAL_PORT.print(",");
+  SERIAL_PORT.print(gyroZ);
+  SERIAL_PORT.print(",");
+  SERIAL_PORT.print(accX);
+  SERIAL_PORT.print(",");
+  SERIAL_PORT.print(accY);
+  SERIAL_PORT.print(",");
+  SERIAL_PORT.print(accZ);
+  SERIAL_PORT.print(",");
+  SERIAL_PORT.print(magX);
+  SERIAL_PORT.print(",");
+  SERIAL_PORT.print(magY);
+  SERIAL_PORT.print(",");
+  SERIAL_PORT.print(magZ);
+  SERIAL_PORT.print(",");
+  SERIAL_PORT.print(currentTime);
+  SERIAL_PORT.println();
+}
+
+void printFreeHeap()
+{
+  SERIAL_PORT.print("Free heap: ");
+  SERIAL_PORT.println(ESP.getFreeHeap());
+}
+
+void goToSleep()
+{
+  digitalWrite(LED1, HIGH);
+  delay(500);
+  digitalWrite(LED1, LOW);
+  delay(500);
+  digitalWrite(LED1, HIGH);
+  delay(500);
+  digitalWrite(LED1, LOW);
+  delay(500);
+  myICM.sleep(true);
+  myICM.lowPower(true);
+  //esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
+  gpio_pullup_en(GPIO_NUM_25);
+  esp_sleep_enable_ext0_wakeup(GPIO_NUM_25, LOW);
+  esp_deep_sleep_start();
+}
+
 void setup()
 {
   pinMode(LED1,OUTPUT);
   pinMode(LED2,OUTPUT);
+  pinMode(PWR_LED,OUTPUT);
   pinMode(BTN1, INPUT_PULLUP);
   pinMode(BTN2, INPUT_PULLUP); 
   SERIAL_PORT.begin(115200);
   
-  //initSPIFFS();  //ESP32 internal file system
   initMPU();
   initSDCard();
   //SD testikoodia
-  listDir(SD,"/",0);
+  listDir(SD,"/data",0);
+  digitalWrite(LED1, HIGH);
+  delay(500);
+  digitalWrite(LED1, LOW);
+  digitalWrite(LED2, HIGH);
+  delay(500);
+  digitalWrite(LED2, LOW);
+  digitalWrite(PWR_LED, HIGH);
 }
 
 void loop()
@@ -750,34 +841,31 @@ void loop()
   }
   btn1StateOld = btn1State;
   
-  //Start or stop the wifi server
-  if(btn2StateOld == HIGH && btn2State == LOW)
-  {
-    Serial.println("Button 2 pressed");
-    digitalWrite(LED1, !digitalRead(LED1));
-    wifi = !wifi;
-    if(wifi)
-    {
-      setupWiFi();
-    }
-    else
-    {
-      server.end();
-      Serial.println("Server stopped");
-      WiFi.disconnect(true);
-      Serial.println("Wifi disconnected");
-      WiFi.mode(WIFI_OFF);
-      Serial.println("Wifi off");
-    }
-    delay(100);
-  }
-  btn2StateOld = btn2State;
 
-  if(btn1State == LOW && btn2State == LOW)
+if(btn2StateOld == HIGH && btn2State == LOW)
+{
+  btn2PressTime = millis(); // Tallenna aika, kun nappi painetaan alas
+}
+else if(btn2StateOld == LOW && btn2State == HIGH)
+{
+  unsigned long pressDuration = millis() - btn2PressTime; // Laske, kuinka kauan nappi oli alhaalla
+
+  if(pressDuration < 3000) //
   {
-    //Don't use if not necessary
-    Serial.println("Both buttons pressed");
+    Serial.println("Button 2 short press");
+    //Start or stop the wifi server
+    setWiFiOnOff();
   }
+  else
+  {
+    Serial.println("Button 2 long press");
+    goToSleep();
+  }
+
+  delay(100);
+}
+
+btn2StateOld = btn2State;
   
 
   // Read the sensor data
@@ -794,6 +882,7 @@ void loop()
       //printRawAGMT( myICM.agmt );
       getSensorData(&myICM);
       //printSensorData();
+      //printDataCsv();
       saveDataToFile();
     }
     else
@@ -827,4 +916,5 @@ void loop()
     lastTimeTemperature = millis();
     }
   }
+  //printFreeHeap();
 }
