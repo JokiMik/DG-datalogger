@@ -53,12 +53,15 @@
         <p><span class="reading"><span id="temp"></span> &deg;C</span></p>
       </div>
       <div class="card">
-        <p class="card-title">TEST SD CARD</p>
+        <p class="card-title">SD CARD</p>
         <p><button id="filecount" onclick="sendCommand(this)">GET FILE COUNT</button></p>
         <p><span class="reading">FILES: <span id="SDfilecount"></span> </span></p>
+        <p><button id="list" onclick="location.href='/list' " type="button">DOWNLOAD FILES</button></p>
+        <p><button id="delete" onclick="confirmDelete(this)" type="button">DELETE FILES</button></p>
         <p><button id="cardsize" onclick="sendCommand(this)">GET CARD SIZE</button></p>
         <p><span class="reading">SIZE: <span id="SDcard"></span> MB</span></p>
       </div>
+
     </div>
     <div class="cube-content">
       <div id="3Dcube"></div>

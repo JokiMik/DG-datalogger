@@ -135,3 +135,9 @@ function sendCommand(element){
   console.log(element.id);
   xhr.send();
 }
+
+function confirmDelete(element) {
+  if (confirm("Are you sure you want to delete all data files?")) {
+    sendCommand(element);
+  }
+}

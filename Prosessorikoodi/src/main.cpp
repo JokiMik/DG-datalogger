@@ -283,6 +283,8 @@ void initWiFi() {
     digitalWrite(LED2, !digitalRead(LED2));
     delay(1000);
   }
+  digitalWrite(LED1, HIGH);
+  digitalWrite(LED2, LOW);
   SERIAL_PORT.println("");
   SERIAL_PORT.println(WiFi.localIP());
 }
@@ -380,6 +382,54 @@ void setupWiFi(){
 
   server.serveStatic("/", SD, "/");
   
+  server.on("/list", HTTP_GET, [] (AsyncWebServerRequest *request) {
+    String html = "<html><body><ul>";
+    File root = SD.open("/data");
+    if (root) {
+      File file = root.openNextFile();
+      while (file) {
+        html += "<li><a href=\"/download?file=";
+        html += file.name();
+        html += "\">";
+        html += file.name();
+        html += "</a></li>";
+        file = root.openNextFile();
+      }
+    }
+    html += "</ul></body></html>";
+    request->send(200, "text/html", html);
+  });
+  
+  server.on("/download", HTTP_GET, [] (AsyncWebServerRequest *request) {
+    if (request->hasParam("file")) {
+      String filename = request->getParam("file")->value();
+      File file = SD.open("/data/" + filename);
+      if (!file) {
+        request->send(404, "text/plain", "File not found");
+        return;
+      }
+      request->send(file, file.name(), "application/octet-stream", true);
+    } else {
+      request->send(400, "text/plain", "Bad request");
+    }
+  });
+
+  server.on("/delete", HTTP_GET, [] (AsyncWebServerRequest *request) {
+    File root = SD.open("/data");
+    if (!root) {
+      request->send(404, "text/plain", "Directory not found");
+      return;
+    }
+
+    File file = root.openNextFile();
+    while (file) {
+      SD.remove(String("/data/") + file.name());
+      file = root.openNextFile();
+    }
+
+    request->send(200, "text/plain", "Files deleted successfully");
+  });
+
   server.on("/startstop", HTTP_GET, [](AsyncWebServerRequest *request){
     startStopMeasurement();
     request->send(200, "text/plain", "OK");
@@ -691,7 +741,7 @@ void saveDataToFile(){
 
 void setWiFiOnOff()
 {
-  digitalWrite(LED1, !digitalRead(LED1));
+  //digitalWrite(LED1, !digitalRead(LED1));
   wifi = !wifi;
   if(wifi)
   {
@@ -704,6 +754,7 @@ void setWiFiOnOff()
     WiFi.disconnect(true);
     WiFi.mode(WIFI_OFF);
     Serial.println("Wifi off");
+    digitalWrite(LED1, LOW);
   }
 }
 
