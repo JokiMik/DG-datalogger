@@ -744,10 +744,6 @@ void autoStopMeasurement(){
       //Serial.println("Stop flag deactivated");
       stopFlagTime = 0;
       digitalWrite(LED2, LOW);
-      if(!wifi)
-      {
-        setWiFiOnOff(); //When the stop flag is deactivated, turn on the WiFi radio
-      }
     }
   }
   else 
@@ -896,22 +892,18 @@ btn2StateOld = btn2State;
   if(wifi && IMU)
   {
     if ((millis() - lastTime) > gyroDelay) {
-    // Send Events to the Web Server with the Sensor Readings
     events.send(getGyroReadings().c_str(),"gyro_readings",millis());
     lastTime = millis();
     }
     if ((millis() - lastTimeAcc) > accelerometerDelay) {
-    // Send Events to the Web Server with the Sensor Readings
     events.send(getAccReadings().c_str(),"accelerometer_readings",millis());
     lastTimeAcc = millis();
     }
     if ((millis() - lastTimeMag) > magDelay) {
-    // Send Events to the Web Server with the Sensor Readings
     events.send(getMagReadings().c_str(),"magnetometer_readings",millis());
     lastTimeMag = millis();
     }
     if ((millis() - lastTimeTemperature) > temperatureDelay) {
-    // Send Events to the Web Server with the Sensor Readings
     events.send(getTemperature().c_str(),"temperature_reading",millis());
     lastTimeTemperature = millis();
     }
