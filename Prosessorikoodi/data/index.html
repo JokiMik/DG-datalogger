@@ -58,8 +58,11 @@
         <p><span class="reading">FILES: <span id="SDfilecount"></span> </span></p>
         <p><button id="list" onclick="location.href='/list' " type="button">DOWNLOAD FILES</button></p>
         <p><button id="delete" onclick="confirmDelete(this)" type="button">DELETE FILES</button></p>
-        <p><button id="cardsize" onclick="sendCommand(this)">GET CARD SIZE</button></p>
-        <p><span class="reading">SIZE: <span id="SDcard"></span> MB</span></p>
+      </div>
+      <div class="card">
+        <p class="card-title">MEMORY</p>
+        <p><button id="cardsize" onclick="sendCommand(this)">CHECK RAM</button></p>
+        <p><span class="reading">FREE HEAP: <span id="SDcard"></span> B</span></p>
       </div>
 
     </div>
