@@ -70,6 +70,7 @@ ICM_20948_I2C myICM; // Otherwise create an ICM_20948_I2C object
 #endif
 
 //SD:n käyttöfunktioiden julistukset
+void listDir(fs::FS &fs, const char * dirname, uint8_t levels);
 void writeFile(fs::FS &fs, const char * path, const char * message);
 void appendFile(fs::FS &fs, const char * path, const char * message);
 int createDataFile(fs::FS &fs, const char * dirname);
@@ -343,6 +344,15 @@ String getAutoStop(){
   }
 }
 void startStopMeasurement(){
+  //Tarkistus onko SD-kortti pysynyt paikallaan
+  uint8_t cardType = SD.cardType();
+
+  while(cardType == CARD_NONE){
+    Serial.println("SD card not attached!");
+    digitalWrite(LED1, !digitalRead(LED1));
+    delay(500);
+  }
+
   createDataFlag = !createDataFlag;
   IMU = !IMU;
   if(createDataFlag){
@@ -513,6 +523,37 @@ void printSensorData()
 //   ALKAA ALAPUOLELLA
 //   kirjastoihin mahdollisesti laitettavat SD funktiot 
 //
+void listDir(fs::FS &fs, const char * dirname, uint8_t levels){
+  Serial.printf("Listing directory: %s\n", dirname);
+
+  File root = fs.open(dirname);
+  if(!root){
+    Serial.println("Failed to open directory");
+    return;
+  }
+  if(!root.isDirectory()){
+    Serial.println("Not a directory");
+    return;
+  }
+
+  File file = root.openNextFile();
+  while(file){
+    if(file.isDirectory()){
+      Serial.print("  DIR : ");
+      Serial.println(file.name());
+      if(levels){
+        listDir(fs, file.name(), levels -1);
+      }
+    } else {
+      Serial.print("  FILE: ");
+      Serial.print(file.name());
+      Serial.print("  SIZE: ");
+      Serial.println(file.size());
+    }
+    file = root.openNextFile();
+  }
+}
+
 void writeFile(fs::FS &fs, const char * path, const char * message){
   Serial.printf("Writing file: %s\n", path);
 
@@ -580,7 +621,7 @@ int createDataFile(fs::FS &fs, const char * dirname){
 //   kirjastoihin laitettavat SD funktiot 
 //
 
-void saveDataToFile(){
+/* void saveDataToFile(){
   unsigned long currentTime = millis();
   char path[32];
   char buffer[141];
@@ -600,7 +641,45 @@ void saveDataToFile(){
     }
     appendFile(SD,path,buffer);
   }
+} */
+//Tällä funktiolla sample rate kasvoi 10 kertaiseksi eli n. 50Hz vaikka kirjoitetaan vain yksi rivi kerrallaan
+#define MAX_LINES 1
+#define LINE_SIZE 141
+#define BUFFER_SIZE (MAX_LINES * LINE_SIZE)
+
+void saveDataToFile(){
+  static char buffer[BUFFER_SIZE];
+  static int lineCount = 0;
+  unsigned long currentTime = millis();
+  char path[32];
+  char line[LINE_SIZE];
+  int ret;
+  sprintf(path, "/data/%d.csv",dataFileIndex);
+  
+  float sensorData[] = {gyroX, gyroY, gyroZ, accX, accY, accZ, magX, magY, magZ, (float)currentTime};
+
+  for (int i=0; i<10; i++){
+    const char* format = (i < 9) ? "%f," : "%f\n";
+    ret = snprintf(line, sizeof line, format, sensorData[i]);
+    if(ret<0){
+      Serial.print("Sensor data write to buffer FAILED\n");
+    }
+    if(ret>=sizeof line){
+      Serial.print("Result was truncated - check buffer size");
+    }
+    // Append the line to the buffer
+    strncat(buffer, line, sizeof buffer - strlen(buffer) - 1);
+  }
+
+  // If the buffer is full, write it to the SD card
+  lineCount++;
+  if (lineCount >= MAX_LINES) {
+    appendFile(SD, path, buffer);
+    lineCount = 0;
+    buffer[0] = '\0'; // Clear the buffer
+  }
 }
+
 
 void setWiFiOnOff()
 {
@@ -726,6 +805,8 @@ void setup()
   
   initMPU();
   initSDCard();
+  //SD testikoodia
+  listDir(SD,"/data",0);
   digitalWrite(LED1, HIGH);
   delay(500);
   digitalWrite(LED1, LOW);
