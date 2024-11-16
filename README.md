@@ -1,4 +1,4 @@
-# DG-datalogger
+# Electronics application project Spring 2024
 
 ![Start slide](pictures/presentation.png-0.png)
 ![Starting point](pictures/presentation.png-1.png)
